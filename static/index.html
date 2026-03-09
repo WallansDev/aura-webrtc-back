@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aura — Visioconférence</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── Page d'accueil ── -->
+  <div id="page-landing" class="page">
+    <div class="landing-card">
+      <div class="brand">
+        <div class="brand-icon">◈</div>
+        <h1>Aura</h1>
+      </div>
+      <p class="brand-tagline">Visioconférence simple &amp; directe</p>
+
+      <div class="form-group">
+        <label for="input-name">Votre nom</label>
+        <input id="input-name" type="text" placeholder="ex : Alice" maxlength="32" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label for="input-room">Nom de la salle</label>
+        <input id="input-room" type="text" placeholder="ex : reunion-projet" maxlength="48" autocomplete="off" />
+      </div>
+
+      <button id="btn-join" class="btn-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 10l4.553-2.369A1 1 0 0121 8.53v6.94a1 1 0 01-1.447.899L15 14"/>
+          <rect x="3" y="7" width="12" height="10" rx="2"/>
+        </svg>
+        Rejoindre la salle
+      </button>
+
+      <div id="landing-error" class="error-msg hidden"></div>
+    </div>
+  </div>
+
+  <!-- ── Page de conférence ── -->
+  <div id="page-conference" class="page hidden">
+
+    <header class="conf-header">
+      <div class="conf-header-left">
+        <span class="brand-icon-sm">◈</span>
+        <span id="header-room-name"></span>
+      </div>
+      <div id="header-status" class="status-badge connecting">
+        <span class="status-dot"></span>
+        <span class="status-label">Connexion…</span>
+      </div>
+    </header>
+
+    <main id="video-grid" class="video-grid"></main>
+
+    <footer class="controls-bar">
+      <button id="btn-mute" class="ctrl-btn" title="Micro">
+        <svg id="icon-mic-on" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4z"/>
+          <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <svg id="icon-mic-off" class="hidden red-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="1" y1="1" x2="23" y2="23"/>
+          <path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V5a3 3 0 00-5.94-.6"/>
+          <path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <span>Micro</span>
+      </button>
+
+      <button id="btn-camera" class="ctrl-btn" title="Caméra">
+        <svg id="icon-cam-on" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 10l4.553-2.369A1 1 0 0121 8.53v6.94a1 1 0 01-1.447.899L15 14"/>
+          <rect x="3" y="7" width="12" height="10" rx="2"/>
+        </svg>
+        <svg id="icon-cam-off" class="hidden red-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 16v1a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2h2m5.66 0H14a2 2 0 012 2v3.34l1 1L23 7v10"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+        <span>Caméra</span>
+      </button>
+
+      <button id="btn-screen" class="ctrl-btn" title="Partager l'écran">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <span>Écran</span>
+      </button>
+
+      <button id="btn-leave" class="ctrl-btn ctrl-danger" title="Quitter">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.68 13.31a16 16 0 003.41 2.6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7 2 2 0 011.72 2v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.42 19.42 0 01-3.33-3.33"/>
+          <path d="M5 3h-2a2 2 0 00-2 2v3a2 2 0 001.72 2 12.84 12.84 0 002.81.7 2 2 0 012.11-.45l1.27-1.27"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+        <span>Quitter</span>
+      </button>
+    </footer>
+
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
