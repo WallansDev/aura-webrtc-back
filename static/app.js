@@ -176,19 +176,13 @@ function createPeerConnection(peerId) {
   const pc = new RTCPeerConnection(ICE_CONFIG);
   peerConnections[peerId] = pc;
 
-  // Ajout des pistes audio locales
-  localStream.getAudioTracks().forEach((track) => pc.addTrack(track, localStream));
-
-  // Piste vidéo : utilise l'écran partagé si un partage est en cours, sinon la caméra
-  const videoTrack = screenSharing && activeScreenTrack
-    ? activeScreenTrack
-    : localStream.getVideoTracks()[0];
-  if (videoTrack) pc.addTrack(videoTrack, localStream);
-
-  // Réception du flux distant
+  // Réception du flux distant. On reconstruit un MediaStream par pair et on y
+  // ajoute chaque piste reçue : robuste même si event.streams est vide.
+  const remoteStream = new MediaStream();
   pc.ontrack = (event) => {
+    remoteStream.addTrack(event.track);
     const displayName = peerDisplayNames[peerId] || peerId.substring(0, 6);
-    addVideoTile(peerId, event.streams[0], displayName, false);
+    addVideoTile(peerId, remoteStream, displayName, false);
   };
 
   // Envoi des candidats ICE au serveur de signalisation
@@ -207,8 +201,37 @@ function createPeerConnection(peerId) {
   return pc;
 }
 
+/**
+ * Retourne le sender vidéo d'une connexion. On l'identifie via le transceiver
+ * (son receiver.track.kind reste fiable même si le sender n'a pas de piste).
+ */
+function getVideoSender(pc) {
+  const transceiver = pc.getTransceivers()
+    .find((t) => t.receiver?.track?.kind === "video");
+  return transceiver ? transceiver.sender : null;
+}
+
+/** Piste vidéo locale à émettre : écran partagé si actif, sinon caméra. */
+function getLocalVideoTrack() {
+  return screenSharing && activeScreenTrack
+    ? activeScreenTrack
+    : (localStream.getVideoTracks()[0] ?? null);
+}
+
 async function createOffer(peerId) {
   const pc = createPeerConnection(peerId);
+
+  // Côté OFFREUR : on crée explicitement les m-lines audio + vidéo en sendrecv
+  // (avec association de stream pour le msid). La vidéo est donc toujours
+  // négociable, même si ce pair n'a pas de caméra.
+  const audioTr = pc.addTransceiver("audio", { direction: "sendrecv", streams: [localStream] });
+  const videoTr = pc.addTransceiver("video", { direction: "sendrecv", streams: [localStream] });
+
+  const audioTrack = localStream.getAudioTracks()[0] ?? null;
+  if (audioTrack) await audioTr.sender.replaceTrack(audioTrack);
+  const videoTrack = getLocalVideoTrack();
+  if (videoTrack) await videoTr.sender.replaceTrack(videoTrack);
+
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   wsSend({ type: "offer", target: peerId, sdp: pc.localDescription });
@@ -222,6 +245,23 @@ async function handleOffer(fromId, sdp) {
     pc = createPeerConnection(fromId);
   }
   await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+
+  // Côté RÉPONDEUR : setRemoteDescription a créé les transceivers d'après
+  // l'offre. On y attache nos pistes et on force sendrecv pour RÉÉMETTRE notre
+  // média vers l'offreur (sans quoi l'hôte ne renvoyait pas sa vidéo).
+  for (const transceiver of pc.getTransceivers()) {
+    const kind = transceiver.receiver?.track?.kind;
+    if (kind === "audio") {
+      const audioTrack = localStream.getAudioTracks()[0] ?? null;
+      if (audioTrack) await transceiver.sender.replaceTrack(audioTrack);
+      transceiver.direction = "sendrecv";
+    } else if (kind === "video") {
+      const videoTrack = getLocalVideoTrack();
+      if (videoTrack) await transceiver.sender.replaceTrack(videoTrack);
+      transceiver.direction = "sendrecv";
+    }
+  }
+
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   wsSend({ type: "answer", target: fromId, sdp: pc.localDescription });
@@ -303,15 +343,11 @@ btnScreen.addEventListener("click", async () => {
       });
       activeScreenTrack = screenStream.getVideoTracks()[0];
 
-      // Remplace la piste vidéo chez tous les pairs, puis renégocie
+      // Remplace la piste vidéo chez tous les pairs, puis renégocie.
+      // Le transceiver vidéo existe toujours : replaceTrack suffit même sans caméra.
       for (const [peerId, pc] of Object.entries(peerConnections)) {
-        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
-        if (sender) {
-          await sender.replaceTrack(activeScreenTrack);
-        } else {
-          // Pas de caméra : ajoute une nouvelle piste vidéo
-          pc.addTrack(activeScreenTrack, localStream);
-        }
+        const sender = getVideoSender(pc);
+        if (sender) await sender.replaceTrack(activeScreenTrack);
         await renegotiate(peerId);
       }
 
@@ -351,7 +387,7 @@ async function stopScreenShare() {
   // Rétablit la piste caméra d'origine chez tous les pairs, puis renégocie
   const camTrack = localStream.getVideoTracks()[0] ?? null;
   for (const [peerId, pc] of Object.entries(peerConnections)) {
-    const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+    const sender = getVideoSender(pc);
     if (sender) {
       await sender.replaceTrack(camTrack); // null si pas de caméra = désactive la vidéo
     }
